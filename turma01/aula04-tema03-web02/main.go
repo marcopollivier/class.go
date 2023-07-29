@@ -2,12 +2,10 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
 	"log"
-	"net/http"
 
+	"github.com/gofiber/fiber/v2"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -33,28 +31,19 @@ type Data struct {
 }
 
 func main() {
-	client, err := mongo.Connect(context.Background(), options.Client().ApplyURI("mongodb://localhost:27018"))
-	if err != nil {
-		log.Fatal(err)
-	}
+	client, _ := mongo.Connect(context.Background(), options.Client().ApplyURI("mongodb://localhost:27018"))
 	defer client.Disconnect(context.Background())
 
-	collection := client.Database("weatherdb").Collection("weatherdata")
+	app := fiber.New()
 
-	var apiUrl = "http://apiadvisor.climatempo.com.br/api/v1/weather/locale/3477/current?token=89265a6623296fdf9a4cabf5ba0233a4"
-	resp, _ := http.Get(apiUrl)
-	body, _ := io.ReadAll(resp.Body)
+	app.Get("/weather", func(c *fiber.Ctx) error {
 
-	var weather WeatherData
-	err = json.Unmarshal(body, &weather)
-	if err != nil {
-		log.Fatal("Error decoding JSON:", err)
-	}
+		collection := client.Database("weatherdb").Collection("weatherdata")
+		var weather WeatherData
+		collection.FindOne(context.Background(), bson.M{}).Decode(&weather)
 
-	_, err = collection.InsertOne(context.Background(), weather)
-	if err != nil {
-		log.Fatal("Error inserting data into MongoDB:", err)
-	}
+		return c.JSON(weather)
+	})
 
-	fmt.Println("Data inserted successfully.")
+	log.Fatal(app.Listen(":8080"))
 }
